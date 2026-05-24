@@ -1,5 +1,6 @@
 import os
 import io
+import html
 
 import streamlit as st
 from pypdf import PdfReader
@@ -80,11 +81,15 @@ with st.sidebar:
     with tab_upload:
         pdf_file = st.file_uploader("Choose a PDF", type="pdf", label_visibility="collapsed")
         if pdf_file and st.button("Process PDF", use_container_width=True):
-            raw_text = "\n\n".join(
-                page.extract_text() or ""
-                for page in PdfReader(io.BytesIO(pdf_file.read())).pages
-            )
-            ingest(raw_text, pdf_file.name)
+            MAX_PDF_MB = 10
+            if pdf_file.size > MAX_PDF_MB * 1024 * 1024:
+                st.error(f"PDF too large. Maximum size is {MAX_PDF_MB} MB.")
+            else:
+                raw_text = "\n\n".join(
+                    page.extract_text() or ""
+                    for page in PdfReader(io.BytesIO(pdf_file.read())).pages
+                )
+                ingest(raw_text, pdf_file.name)
 
     with tab_paste:
         pasted = st.text_area("Paste document text", height=180, label_visibility="collapsed")
@@ -113,21 +118,25 @@ if st.session_state.index is None:
     st.info("👈 Upload a PDF or paste text in the sidebar to begin.")
     st.stop()
 
+def render_sources(sources: list) -> None:
+    with st.expander("📎 Sources", expanded=False):
+        for src in sources:
+            safe_chunk = html.escape(src["chunk"][:420])
+            ellipsis = "&#8230;" if len(src["chunk"]) > 420 else ""
+            st.markdown(
+                f'<div class="score-badge">Chunk {src["idx"]+1} · '
+                f'similarity {src["score"]:.2f}</div>'
+                f'<div class="source-box">{safe_chunk}{ellipsis}</div>',
+                unsafe_allow_html=True,
+            )
+
+
 # Render chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
         if msg["role"] == "assistant" and msg.get("sources"):
-            with st.expander("📎 Sources", expanded=False):
-                for src in msg["sources"]:
-                    st.markdown(
-                        f'<div class="score-badge">Chunk {src["idx"]+1} · '
-                        f'similarity {src["score"]:.2f}</div>'
-                        f'<div class="source-box">'
-                        f'{src["chunk"][:420]}{"…" if len(src["chunk"]) > 420 else ""}'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
+            render_sources(msg["sources"])
 
 # Chat input
 if prompt := st.chat_input("Ask a question about your document…"):
@@ -140,16 +149,7 @@ if prompt := st.chat_input("Ask a question about your document…"):
             retrieved = retrieve(prompt, st.session_state.index, st.session_state.chunks)
             answer = generate_answer(prompt, retrieved)
         st.markdown(answer)
-        with st.expander("📎 Sources", expanded=False):
-            for src in retrieved:
-                st.markdown(
-                    f'<div class="score-badge">Chunk {src["idx"]+1} · '
-                    f'similarity {src["score"]:.2f}</div>'
-                    f'<div class="source-box">'
-                    f'{src["chunk"][:420]}{"…" if len(src["chunk"]) > 420 else ""}'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
+        render_sources(retrieved)
 
     st.session_state.messages.append({
         "role": "assistant",
