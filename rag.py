@@ -16,7 +16,7 @@ CHUNK_SIZE = 250
 CHUNK_OVERLAP = 40
 TOP_K = 4
 
-_enc = tiktoken.encoding_for_model("gpt-4o-mini")
+_enc = tiktoken.get_encoding("cl100k_base")
 _embedder: Optional[SentenceTransformer] = None
 
 
@@ -106,6 +106,8 @@ Keep answers concise and cite the relevant passage when helpful."""
 
 
 def generate_answer(query: str, retrieved: list[dict], client: OpenAI, provider: str = "groq") -> str:
+    if not retrieved:
+        return "No relevant content found in the document for that question."
     context = "\n\n---\n\n".join(
         f"[Chunk {i+1}]: {r['chunk']}" for i, r in enumerate(retrieved)
     )
