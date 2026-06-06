@@ -15,6 +15,7 @@ OPENAI_CHAT_MODEL = "gpt-4o-mini"
 CHUNK_SIZE = 250
 CHUNK_OVERLAP = 40
 TOP_K = 4
+MIN_SCORE = 0.20  # cosine similarity floor — below this the chunk is not relevant enough
 
 _enc = tiktoken.get_encoding("cl100k_base")
 _embedder: Optional[SentenceTransformer] = None
@@ -94,7 +95,7 @@ def retrieve(
     return [
         {"chunk": chunks[idx], "score": float(score), "idx": int(idx)}
         for score, idx in zip(scores[0], indices[0])
-        if idx != -1
+        if idx != -1 and float(score) >= MIN_SCORE
     ]
 
 
