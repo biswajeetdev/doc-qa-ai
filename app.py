@@ -99,7 +99,7 @@ with st.sidebar:
             type="password",
             placeholder="gsk_...",
             value=os.getenv("GROQ_API_KEY", ""),
-        )
+        ).strip()
         st.caption("Free key at [console.groq.com/keys](https://console.groq.com/keys)")
         chat_client = make_chat_client(api_key, "groq") if api_key else None
         openai_client = None
@@ -109,7 +109,7 @@ with st.sidebar:
             type="password",
             placeholder="sk-...",
             value=os.getenv("OPENAI_API_KEY", ""),
-        )
+        ).strip()
         chat_client = make_chat_client(api_key, "openai") if api_key else None
         openai_client = chat_client
 
@@ -121,17 +121,20 @@ with st.sidebar:
     tab_upload, tab_paste = st.tabs(["Upload PDF", "Paste text"])
 
     with tab_upload:
-        pdf_file = st.file_uploader("Choose a PDF", type="pdf", label_visibility="collapsed")
-        if pdf_file and st.button("Process PDF", use_container_width=True, disabled=not ready):
-            MAX_PDF_MB = 10
-            if pdf_file.size > MAX_PDF_MB * 1024 * 1024:
-                st.error(f"PDF too large. Maximum size is {MAX_PDF_MB} MB.")
+        uploaded = st.file_uploader("Choose a PDF or TXT", type=["pdf", "txt"], label_visibility="collapsed")
+        if uploaded and st.button("Process file", use_container_width=True, disabled=not ready):
+            MAX_FILE_MB = 10
+            if uploaded.size > MAX_FILE_MB * 1024 * 1024:
+                st.error(f"File too large. Maximum size is {MAX_FILE_MB} MB.")
+            elif uploaded.type == "text/plain" or uploaded.name.endswith(".txt"):
+                raw_text = uploaded.read().decode("utf-8", errors="replace")
+                ingest(raw_text, uploaded.name, provider, chat_client, openai_client)
             else:
                 raw_text = "\n\n".join(
                     page.extract_text() or ""
-                    for page in PdfReader(io.BytesIO(pdf_file.read())).pages
+                    for page in PdfReader(io.BytesIO(uploaded.read())).pages
                 )
-                ingest(raw_text, pdf_file.name, provider, chat_client, openai_client)
+                ingest(raw_text, uploaded.name, provider, chat_client, openai_client)
 
     with tab_paste:
         pasted = st.text_area("Paste document text", height=180, label_visibility="collapsed")
